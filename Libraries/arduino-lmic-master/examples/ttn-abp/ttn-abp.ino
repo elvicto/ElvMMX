@@ -33,17 +33,18 @@
 #include <hal/hal.h>
 #include <SPI.h>
 
-boolean n=LOW,oldn=LOW;
-int count=0;
-
 // LoRaWAN NwkSKey, network session key
 // This is the default Semtech key, which is used by the early prototype TTN
 // network.
-static const PROGMEM u1_t NWKSKEY[16] = { 0x14, 0x2E, 0xDD, 0xC4, 0x7C, 0xFD, 0x49, 0x9A, 0x7D, 0x15, 0xAA, 0xC2, 0x63, 0x38, 0x84, 0x5A };
+static const PROGMEM u1_t NWKSKEY[16] = { 0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C };
 
-static const u1_t PROGMEM APPSKEY[16] = { 0xF7, 0x0D, 0xAF, 0x15, 0xFC, 0x0F, 0x36, 0xBA, 0x93, 0xB0, 0xEE, 0xA9, 0x30, 0x9D, 0x4C, 0xFB };
+// LoRaWAN AppSKey, application session key
+// This is the default Semtech key, which is used by the early prototype TTN
+// network.
+static const u1_t PROGMEM APPSKEY[16] = { 0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C };
 
-static const u4_t DEVADDR = 0x26041EDB ; // <-- Change this address for every node!
+// LoRaWAN end-device address (DevAddr)
+static const u4_t DEVADDR = 0x03FF0001 ; // <-- Change this address for every node!
 
 // These callbacks are only used in over-the-air activation, so they are
 // left empty here (we cannot leave them out completely unless
@@ -52,7 +53,7 @@ void os_getArtEui (u1_t* buf) { }
 void os_getDevEui (u1_t* buf) { }
 void os_getDevKey (u1_t* buf) { }
 
-static uint8_t mydata[] = "0000000";
+static uint8_t mydata[] = "Hello, world!";
 static osjob_t sendjob;
 
 // Schedule TX every this many seconds (might become longer due to duty
@@ -61,7 +62,7 @@ const unsigned TX_INTERVAL = 60;
 
 // Pin mapping
 const lmic_pinmap lmic_pins = {
-    .nss = 10,
+    .nss = 6,
     .rxtx = LMIC_UNUSED_PIN,
     .rst = 5,
     .dio = {2, 3, 4},
@@ -133,29 +134,19 @@ void onEvent (ev_t ev) {
 }
 
 void do_send(osjob_t* j){
-
-  int temp=count;
- 
-  for(int i = 0; i < 7; i++) //convert integer to format of mydata
-  {
-     mydata[i] = count % 10;  // remainder of division with 10 gets the last digit
-     count /= 10;     // dividing by ten chops off the last digit.
-  }
-  count=temp;  
-  
     // Check if there is not a current TX/RX job running
     if (LMIC.opmode & OP_TXRXPEND) {
         Serial.println(F("OP_TXRXPEND, not sending"));
     } else {
         // Prepare upstream data transmission at the next possible time.
-        LMIC_setTxData2(1,mydata, sizeof(mydata)-1, 0);
+        LMIC_setTxData2(1, mydata, sizeof(mydata)-1, 0);
         Serial.println(F("Packet queued"));
     }
     // Next TX is scheduled after TX_COMPLETE event.
 }
 
 void setup() {
-    Serial.begin(9600);
+    Serial.begin(115200);
     Serial.println(F("Starting"));
 
     #ifdef VCC_ENABLE
@@ -186,43 +177,50 @@ void setup() {
     LMIC_setSession (0x1, DEVADDR, NWKSKEY, APPSKEY);
     #endif
 
-  LMIC_setupChannel(0, 865062500, DR_RANGE_MAP(DR_SF12, DR_SF12),  BAND_CENTI);      // g-band
-  LMIC_setupChannel(1, 865402500, DR_RANGE_MAP(DR_SF12, DR_SF12), BAND_CENTI);      // g-band
-  LMIC_setupChannel(2, 865985000, DR_RANGE_MAP(DR_SF12, DR_SF12),  BAND_CENTI);      // g-band
+    #if defined(CFG_eu868)
+    // Set up the channels used by the Things Network, which corresponds
+    // to the defaults of most gateways. Without this, only three base
+    // channels from the LoRaWAN specification are used, which certainly
+    // works, so it is good for debugging, but can overload those
+    // frequencies, so be sure to configure the full frequency range of
+    // your network here (unless your network autoconfigures them).
+    // Setting up channels should happen after LMIC_setSession, as that
+    // configures the minimal channel set.
+    // NA-US channels 0-71 are configured automatically
+    LMIC_setupChannel(0, 868100000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
+    LMIC_setupChannel(1, 868300000, DR_RANGE_MAP(DR_SF12, DR_SF7B), BAND_CENTI);      // g-band
+    LMIC_setupChannel(2, 868500000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
+    LMIC_setupChannel(3, 867100000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
+    LMIC_setupChannel(4, 867300000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
+    LMIC_setupChannel(5, 867500000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
+    LMIC_setupChannel(6, 867700000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
+    LMIC_setupChannel(7, 867900000, DR_RANGE_MAP(DR_SF12, DR_SF7),  BAND_CENTI);      // g-band
+    LMIC_setupChannel(8, 868800000, DR_RANGE_MAP(DR_FSK,  DR_FSK),  BAND_MILLI);      // g2-band
+    // TTN defines an additional channel at 869.525Mhz using SF9 for class B
+    // devices' ping slots. LMIC does not have an easy way to define set this
+    // frequency and support for class B is spotty and untested, so this
+    // frequency is not configured here.
+    #elif defined(CFG_us915)
+    // NA-US channels 0-71 are configured automatically
+    // but only one group of 8 should (a subband) should be active
+    // TTN recommends the second sub band, 1 in a zero based count.
+    // https://github.com/TheThingsNetwork/gateway-conf/blob/master/US-global_conf.json
+    LMIC_selectSubBand(1);
+    #endif
 
+    // Disable link check validation
+    LMIC_setLinkCheckMode(0);
 
-  // Disable link check validation
-  LMIC_setLinkCheckMode(0);
+    // TTN uses SF9 for its RX2 window.
+    LMIC.dn2Dr = DR_SF9;
 
-  // Set data rate and transmit power (note: txpow seems to be ignored by the library)
-  LMIC_setDrTxpow(DR_SF7, 20);
+    // Set data rate and transmit power for uplink (note: txpow seems to be ignored by the library)
+    LMIC_setDrTxpow(DR_SF7,14);
 
     // Start job
     do_send(&sendjob);
 }
 
 void loop() {
-
-  os_runloop_once();
-
-  //reading sensor data and counting
-   int sensorValue = analogRead(A0);
-  int threshold = analogRead(A1);// threshold set by a potentiometer
-
-  if(sensorValue>threshold)
-  {
-    n=HIGH;
-  }
-  else
-  {
-    n=LOW;
-  }
-  
-  if((oldn==LOW)&&(n==HIGH))  //detecting rising edge
-  {
-    count++;
-    Serial.println(count);
-  }
-    oldn=n;
-    
+    os_runloop_once();
 }
